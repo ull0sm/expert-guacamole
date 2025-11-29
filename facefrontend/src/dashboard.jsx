@@ -1,15 +1,16 @@
 import "./App.css";
 import { FaHome, FaFileAlt, FaUser, FaDownload } from 'react-icons/fa';
-import { FaUserGraduate, FaClipboardList, FaUsers, FaClock } from "react-icons/fa";
+import { FaUserGraduate, FaClipboardList, FaUsers, FaClock, FaExclamationTriangle } from "react-icons/fa";
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import React, { useState, useEffect } from 'react';
 import { toast } from "react-toastify";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const Dashboard = () => {
     const [attendance, setAttendance] = useState([]);
     const [students, setStudents] = useState([]);
+    const [defaulterStats, setDefaulterStats] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(4);
     const [selectedCourse, setSelectedCourse] = useState("All");
@@ -65,8 +66,18 @@ const Dashboard = () => {
             }
         };
 
+        const fetchDefaulterStats = async () => {
+            try {
+                const response = await axios.get('http://localhost:5001/api/stats/defaulters');
+                setDefaulterStats(response.data);
+            } catch (err) {
+                console.error("Error fetching defaulter stats:", err);
+            }
+        };
+
         fetchAttendance();
         fetchStudents();
+        fetchDefaulterStats();
     }, []);
 
     // Process data for chart (Last 7 days)
@@ -188,19 +199,61 @@ const Dashboard = () => {
                         </div>
                     </div>
 
-                    {/* Chart Section */}
-                    <div className="bg-white rounded-[1.1rem] shadow-md p-6 mb-6">
-                        <h2 className="text-lg font-bold text-gray-800 mb-4">Attendance Trends (Last 7 Days)</h2>
-                        <div className="h-64 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={chartData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                                    <YAxis allowDecimals={false} />
-                                    <Tooltip />
-                                    <Bar dataKey="count" fill="#4F46E5" radius={[4, 4, 0, 0]} name="Present Students" />
-                                </BarChart>
-                            </ResponsiveContainer>
+
+
+                    {/* Defaulter Management Section */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        {/* Attendance Trends */}
+                        <div className="bg-white rounded-[1.1rem] shadow-md p-6">
+                            <h2 className="text-lg font-bold text-gray-800 mb-4">Attendance Trends (Last 7 Days)</h2>
+                            <div className="h-64 w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={chartData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                                        <YAxis allowDecimals={false} />
+                                        <Tooltip />
+                                        <Bar dataKey="count" fill="#4F46E5" radius={[4, 4, 0, 0]} name="Present Students" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        {/* Defaulter Analysis */}
+                        <div className="bg-white rounded-[1.1rem] shadow-md p-6 flex flex-col justify-between">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-800 mb-2">Defaulter Analysis</h2>
+                                <p className="text-sm text-gray-500 mb-4">Students with less than 75% attendance</p>
+                            </div>
+
+                            <div className="h-48 w-full flex items-center justify-center">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={defaulterStats}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={60}
+                                            outerRadius={80}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
+                                            {defaulterStats.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip />
+                                        <Legend />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+
+                            <button
+                                onClick={() => window.open('http://localhost:5001/api/reports/defaulters')}
+                                className="w-full mt-4 bg-red-100 text-red-600 py-3 rounded-xl font-bold hover:bg-red-200 transition flex items-center justify-center gap-2"
+                            >
+                                <FaExclamationTriangle /> Download Defaulter List
+                            </button>
                         </div>
                     </div>
 
@@ -279,7 +332,7 @@ const Dashboard = () => {
                     </div>
 
                     {/* Pagination */}
-                    <div className="text-center text-gray-600 mt-4">
+                    <div className="text-center text-gray-600 mt-4 pb-8">
                         <span
                             onClick={() => currentPage > 1 && paginate(currentPage - 1)}
                             className={`mr-2 cursor-pointer hover:underline ${currentPage === 1 ? 'cursor-not-allowed text-gray-300' : ''}`}
@@ -294,8 +347,6 @@ const Dashboard = () => {
                             Next
                         </span>
                     </div>
-
-
                 </div>
             </div>
         </div>
