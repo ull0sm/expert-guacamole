@@ -1,188 +1,120 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { toast } from "react-toastify";
 
-const Signin = ({ classname }) => {
-    const [authMode, setAuthMode] = useState("login");
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from './supabaseClient';
+import { toast } from 'react-toastify';
+import { Lock, Mail, ChevronRight, Loader2 } from 'lucide-react';
 
-    const handleSignup = async () => {
-        const username = document.querySelector("#signup-username").value;
-        const email = document.querySelector("#signup-email").value;
-        const password = document.querySelector("#signup-password").value;
-        const retypePassword = document.querySelector("#signup-retype").value;
+const Signin = () => {
+    const navigate = useNavigate();
+    const [formData, setFormData] = useState({ email: '', password: '' });
+    const [loading, setLoading] = useState(false);
 
-        if (password !== retypePassword) {
-            toast.error("Passwords do not match!");
-            return;
-        }
-
-        try {
-            const response = await fetch("http://localhost:5001/signup", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ username, email, password }),
-            });
-
-            const data = await response.json();
-            if (response.ok) {
-                toast.success("Signup successful! Please login.");
-                setAuthMode("login");
-            } else {
-                toast.error("Signup failed: " + data.message);
-            }
-        } catch (err) {
-            toast.error("Signup error: " + err.message);
-            console.error(err);
-        }
+    const handleChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleSignin = async () => {
-        const emailOrUsername = document.querySelector("#signin-email").value;
-        const password = document.querySelector("#signin-password").value;
-
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
         try {
-            const response = await fetch("http://localhost:5001/signin", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    email: emailOrUsername,
-                    password,
-                }),
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: formData.email,
+                password: formData.password
             });
 
-            const data = await response.json();
-            if (response.ok) {
-                toast.success("Signin successful! Redirecting...");
-                setTimeout(() => {
-                    window.location.href = "/dashboard";
-                }, 1000);
+            if (error) throw error;
+
+            // Fetch Profile to check role
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', data.user.id)
+                .single();
+
+            if (profile) {
+                if (profile.role === 'admin') navigate('/admin/dashboard');
+                else if (profile.role === 'teacher') navigate('/teacher/dashboard');
+                else if (profile.role === 'student') navigate('/student/dashboard'); // Not implemented yet but placeholder
+                else navigate('/dashboard');
             } else {
-                toast.error("Signin failed: " + data.message);
+                // Fallback if no profile
+                navigate('/admin/dashboard');
             }
-        } catch (err) {
-            toast.error("Signin network error: " + err.message);
-            console.error(err);
+
+            toast.success("Welcome back!");
+
+        } catch (error) {
+            console.error('Signin error:', error);
+            toast.error(error.message || "Failed to sign in");
+        } finally {
+            setLoading(false);
         }
     };
-
 
     return (
-        <div className="mx-auto flex h-screen max-w-lg flex-col md:max-w-none md:flex-row md:pr-10">
-            <div className="max-w-[50rem] rounded-3xl bg-gradient-to-br from-blue-800 to-indigo-900 px-4 py-10 text-white sm:px-10 md:m-6 md:mr-8 relative overflow-hidden">
-                <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                <p className="mb-20 font-bold tracking-wider">College Admin Panel</p>
-                <p className="mb-4 text-3xl font-bold md:text-4xl md:leading-snug">
-                    Welcome to <br />
-                    <span className="text-yellow-300">RV Institute of Technology and Management</span>
-                </p>
-                <p className="mb-28 font-semibold leading-relaxed text-gray-200">
-                    Admin Pannel
-                </p>
-                <div className="bg-blue-600/80 rounded-2xl px-6 py-8">
-                </div>
-            </div>
-            <div className="w-full flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center bg-black text-white font-sans selection:bg-cyan-500 selection:text-white bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-black to-black overflow-hidden relative">
 
+            {/* Background Decorations */}
+            <div className="absolute -top-40 -left-40 w-96 h-96 bg-cyan-500/20 rounded-full blur-[100px] animate-pulse"></div>
+            <div className="absolute top-1/2 -right-40 w-96 h-96 bg-purple-500/10 rounded-full blur-[100px] animate-pulse delay-1000"></div>
 
-                <div className="px-4 py-20 mt-0 ">
-                    <h2 className="mb-2 text-3xl font-bold">{authMode === "login" ? "Admin Login" : "Admin Signup"}</h2>
-                    <p className="mb-1 font-medium text-gray-500">Select Mode</p>
-
-                    <div className="mb-6 flex flex-col gap-y-2 gap-x-4 lg:flex-row">
-                        <div
-                            onClick={() => setAuthMode("login")}
-                            className={`relative flex w-56 items-center justify-center rounded-xl px-4 py-3 font-medium cursor-pointer ${authMode === "login" ? "bg-blue-200 text-blue-800" : "bg-gray-50 text-gray-700"
-                                }`}
-                        >
-                            <span>Login</span>
-                        </div>
-                        <div
-                            onClick={() => setAuthMode("signup")}
-                            className={`relative flex w-56 items-center justify-center rounded-xl px-4 py-3 font-medium cursor-pointer ${authMode === "signup" ? "bg-blue-200 text-blue-800" : "bg-gray-50 text-gray-700"
-                                }`}
-                        >
-                            <span>Signup</span>
-                        </div>
+            <div className="w-full max-w-md p-8 relative z-10 animate-fade-in-up">
+                <div className="bg-white/5 border border-white/10 p-8 rounded-3xl backdrop-blur-xl shadow-2xl">
+                    <div className="text-center mb-8">
+                        <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-2">
+                            Face Attendance
+                        </h1>
+                        <p className="text-slate-400">Sign in to continue</p>
                     </div>
 
-                    {authMode === "login" ? (
-                        <>
-                            <p className="mb-1 font-medium text-gray-500">Email</p>
-                            <div className="mb-4">
-                                <input
-                                    type="text"
-                                    id="signin-email"
-                                    className="w-full rounded-md border-2 border-gray-300 px-4 py-2"
-                                    placeholder="Enter your email or username"
-                                    required
-                                />
-                            </div>
-                            <p className="mb-1 font-medium text-gray-500">Password</p>
-                            <div className="mb-4">
-                                <input
-                                    type="password"
-                                    id="signin-password"
-                                    className="w-full rounded-md border-2 border-gray-300 px-4 py-2"
-                                    placeholder="Enter your password"
-                                    required
-                                />
-                            </div>
-                            <button
-                                onClick={handleSignin}
-                                className="w-full rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 px-8 py-3 font-bold text-white transition-all hover:opacity-90 hover:shadow-lg"
-                            >
-                                Sign In
-                            </button>
-                        </>
-                    ) : (
-                        <>
-                            <p className="mb-1 font-medium text-gray-500">Username</p>
-                            <div className="mb-4">
-                                <input
-                                    type="text"
-                                    id="signup-username"
-                                    className="w-full rounded-md border-2 border-gray-300 px-4 py-2"
-                                    placeholder="Enter your username"
-                                />
-                            </div>
-                            <p className="mb-1 font-medium text-gray-500">Email</p>
-                            <div className="mb-4">
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Email</label>
+                            <div className="relative">
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                                 <input
                                     type="email"
-                                    id="signup-email"
-                                    className="w-full rounded-md border-2 border-gray-300 px-4 py-2"
+                                    name="email"
+                                    required
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    className="w-full bg-slate-900/50 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
                                     placeholder="Enter your email"
                                 />
                             </div>
-                            <p className="mb-1 font-medium text-gray-500">Password</p>
-                            <div className="mb-4">
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Password</label>
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                                 <input
                                     type="password"
-                                    id="signup-password"
-                                    className="w-full rounded-md border-2 border-gray-300 px-4 py-2"
-                                    placeholder="Enter your password"
+                                    name="password"
                                     required
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    className="w-full bg-slate-900/50 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
+                                    placeholder="••••••••"
                                 />
                             </div>
-                            <p className="mb-1 font-medium text-gray-500">Retype Password</p>
-                            <div className="mb-4">
-                                <input
-                                    type="password"
-                                    id="signup-retype"
-                                    className="w-full rounded-md border-2 border-gray-300 px-4 py-2"
-                                    placeholder="Retype your password"
-                                    required
-                                />
-                            </div>
-                            <button onClick={handleSignup} className="w-full rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 px-8 py-3 font-bold text-white transition-all hover:opacity-90 hover:shadow-lg">
-                                Sign Up
-                            </button>
-                        </>
-                    )}
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-cyan-500/20 transition-all transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2 mt-6"
+                        >
+                            {loading ? <Loader2 className="animate-spin" size={20} /> : <>Sign In <ChevronRight size={18} /></>}
+                        </button>
+                    </form>
+
+                    <div className="mt-8 text-center border-t border-white/5 pt-6">
+                        <p className="text-slate-500 text-sm">
+                            Don't have an account? Contact Admin.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>

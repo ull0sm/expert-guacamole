@@ -11,9 +11,11 @@
     "start:all": "concurrently \"npm run dev\" \"node ../server-20251120T131707Z-1-001/server/server.js\" \"python ../python-face-api-20251120T131704Z-1-001/python-face-api/recognize_api.py\""
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.87.0",
     "@tailwindcss/vite": "^4.1.17",
     "axios": "^1.8.4",
     "canvas-confetti": "^1.9.4",
+    "lucide-react": "^0.556.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-icons": "^5.5.0",
