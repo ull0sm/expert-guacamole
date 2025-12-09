@@ -13,43 +13,39 @@ const ClassAttendance = () => {
     const [className, setClassName] = useState('');
     const [subjectName, setSubjectName] = useState('');
 
+    const [user, setUser] = useState(null);
+
     useEffect(() => {
-        fetchData();
+        const init = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setUser(user);
+            if (user) fetchData(user.id);
+        };
+        init();
     }, [classId, subjectId]);
 
-    const fetchData = async () => {
+    const fetchData = async (userId) => {
         try {
-            // Fetch Class & Subject Info
-            const { data: cls } = await supabase.from('classes').select('*').eq('id', classId).single();
-            const { data: sub } = await supabase.from('subjects').select('*').eq('id', subjectId).single();
-            if (cls) setClassName(`${cls.name}-${cls.section}`);
-            if (sub) setSubjectName(`${sub.name} (${sub.code})`);
+            setClassName('General Class');
+            setSubjectName(subjectId); 
 
-            // Fetch Students in this class (Assuming we have a way to link students to classes, 
-            // currently generic because we don't have a 'student_classes' table. 
-            // For now, fetch ALL students? Or assume students are assigned to classes?
-            // The schema has `attendance` linked to class. 
-            // Wait, we forgot `student_classes` assignment table! 
-            // "Admin creates multiple classes and assigns students to those classes."
-            // I missed creating a linking table `student_classes`.
-            // Workaround: We can infer students from `attendance` logs OR we need that table.
-            // For now, let's just show attendance logs.
+            // Secure: Only fetch attendance for this teacher
+            const res = await axios.get(`http://localhost:5001/api/attendance?teacherId=${userId}`);
+            const allLogs = res.data;
 
-            const { data: logs, error } = await supabase
-                .from('attendance')
-                .select(`
-                    id,
-                    date,
-                    status,
-                    timestamp,
-                    profiles (full_name, usn, avatar_url)
-                `)
-                .eq('class_id', classId)
-                .eq('subject_id', subjectId)
-                .order('timestamp', { ascending: false });
+            const courseName = decodeURIComponent(subjectId);
+            const filteredLogs = allLogs.filter(log => log.course === courseName);
+            
+            const adaptedLogs = filteredLogs.map(log => ({
+                id: log.id || Math.random(),
+                name: log.name,
+                usn: log.usn,
+                timestamp: log.recognizedAt,
+                status: 'present',
+                avatar_url: log.avatar_url
+            }));
 
-            if (error) throw error;
-            setAttendance(logs);
+            setAttendance(adaptedLogs);
 
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -87,19 +83,19 @@ const ClassAttendance = () => {
                                 attendance.map((log) => (
                                     <tr key={log.id} className="hover:bg-white/5 transition-colors">
                                         <td className="px-6 py-4 flex items-center gap-3">
-                                            {log.profiles?.avatar_url ? (
-                                                <img src={log.profiles.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                                            {log.avatar_url ? (
+                                                <img src={log.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
                                             ) : (
                                                 <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
                                                     <User size={14} />
                                                 </div>
                                             )}
-                                            {log.profiles?.full_name || 'Unknown'}
+                                            {log.name || 'Unknown'}
                                         </td>
-                                        <td className="px-6 py-4 font-mono text-sm opacity-70">{log.profiles?.usn}</td>
+                                        <td className="px-6 py-4 font-mono text-sm opacity-70">{log.usn}</td>
                                         <td className="px-6 py-4 flex items-center gap-2">
                                             <Calendar size={14} className="opacity-50" />
-                                            {new Date(log.date).toLocaleDateString()}
+                                            {new Date(log.timestamp).toLocaleDateString()}
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className="flex items-center gap-2 text-sm opacity-70">

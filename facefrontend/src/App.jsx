@@ -20,6 +20,8 @@ import AdminTimetable from './pages/admin/AdminTimetable';
 // Teacher Pages
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import ClassAttendance from './pages/teacher/ClassAttendance';
+import TeacherTimetable from './pages/teacher/TeacherTimetable';
+import TeacherAttendanceHistory from './pages/teacher/TeacherAttendanceHistory';
 
 // Kiosk Pages
 import KioskLanding from './pages/kiosk/KioskLanding';
@@ -52,6 +54,8 @@ const App = () => {
         <Route path="/teacher" element={<TeacherLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<TeacherDashboard />} />
+          <Route path="attendance" element={<TeacherAttendanceHistory />} />
+          <Route path="timetable" element={<TeacherTimetable />} />
           <Route path="class/:classId/:subjectId" element={<ClassAttendance />} />
         </Route>
 

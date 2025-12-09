@@ -115,3 +115,129 @@ To stop all running services:
 -   **Database Errors**: Ensure you ran the `database_setup.sql` script completely.
 -   **Face Recognition**: The first run might take time as `DeepFace` downloads model weights.
 -   **Port Conflicts**: Ensure ports 5173, 5001, and 5006 are free.
+
+---
+
+## System Architecture & Control Flow
+
+### High-Level Overview
+
+The system operates as a distributed application with three distinct services communicating to provide face-based attendance.
+
+```mermaid
+graph TD
+    User[User / Student] -->|Access| F[Frontend (React)]
+    Admin[Admin / Teacher] -->|Access| F
+    
+    subgraph "Frontend Layer"
+        F -->|Auth & Data| S[Supabase (Auth/DB)]
+        F -->|Admin Actions| B[Admin Backend (Node.js)]
+        F -->|Face Rec| P[Face Recognition API (Python)]
+    end
+    
+    subgraph "Data Layer"
+        S -->|Users/Attendance| DB[(PostgreSQL)]
+        S -->|Images| ST[(Storage Bucket)]
+    end
+
+    subgraph "Service Layer"
+        B -->|Manage Users| S
+        P -->|Sync Faces| ST
+        P -->|Match Faces| DeepFace[DeepFace Model]
+    end
+```
+
+### 1. Authentication Flow
+*   **Supabase Auth** is the primary identity provider.
+*   **Admins (Teachers)** are created via the Admin Backend (`/api/admin/create-teacher`), which wraps Supabase methods to ensure `profiles` table consistency.
+*   **Students** are similarly created via the Backend to generate standardized credentials (USN/Password).
+
+### 2. Face Registration Flow
+1.  **Capture**: Frontend captures an image via the webcam.
+2.  **Upload**: Image is uploaded directly to Supabase Storage (`face-images` bucket) with a filename format `USN-TIMESTAMP.jpg`.
+3.  **Sync**: Python API periodically (or on trigger) scans the storage bucket.
+4.  **Embedding**: `DeepFace` generates a vector embedding for the face and caches it locally in `faces/.pkl`.
+
+### 3. Attendance Marking Flow
+1.  **Recognition**: Frontend sends a webcam frame to Python API (`/recognize`).
+2.  **Matching**: Python API compares the frame against the local cache using VGG-Face.
+3.  **Verification**: If a match is found (Distance < Threshold), the USN is returned.
+4.  **Logging**: Frontend sends the recognized USN + Timestamp to the Admin Backend.
+5.  **Record**: Admin Backend inserts a record into the `attendance` table in Supabase.
+
+---
+
+## Developer Guide
+
+### How to Add a New API Endpoint
+
+**Node.js Backend**:
+1.  Open `server-2025.../server/server.js`.
+2.  Add a new route:
+    ```javascript
+    app.get('/api/new-endpoint', async (req, res) => {
+        // Your logic here
+    });
+    ```
+3.  Restart the server (if not using nodemon).
+
+**Python Face API**:
+1.  Open `python-face-api.../python-face-api/recognize_api.py`.
+2.  Add a new route:
+    ```python
+    @app.route("/new-action", methods=["POST"])
+    def new_action():
+        return jsonify({"status": "done"})
+    ```
+
+### Debugging Face Recognition
+*   **Logs**: Check the Python terminal window for `Distance` values.
+    *   `Distance < 0.4` usually implies a match.
+    *   If valid faces are not matching, check lighting or try `Sync` again.
+*   **Cache**: If strange errors occur, delete the `.pkl` files in the `faces/` directory and restart the Python API to rebuild the cache.
+
+---
+
+## Project Structure
+
+```
+expert-guacamole/
+├── facefrontend/               # [React + Vite] User Interface
+│   ├── src/
+│   │   ├── pages/              # Dashboard, Login, Student Portal
+│   │   ├── components/         # Reusable UI elements
+│   │   └── supabaseClient.js   # Supabase Connection
+│   └── .env                    # Frontend Config
+│
+├── server-2025.../server/      # [Node.js + Express] Admin Logic
+│   ├── server.js               # Main Application Logic
+│   └── .env                    # Backend Config (Service Role)
+│
+├── python-face-api.../         # [Flask + DeepFace] AI Engine
+│   ├── recognize_api.py        # API Entry Point
+│   ├── faces/                  # Local Face Cache (GitIgnored)
+│   └── .env                    # AI Service Config
+│
+├── supabase/                   # Database Schema
+│   └── database_setup.sql      # Run this to init DB
+│
+└── start_all.bat               # Master startup script
+```
+
+---
+
+## API Documentation
+
+### Admin Backend (Port 5001)
+*   **Base URL**: `http://localhost:5001`
+*   `GET /` - Health Check.
+*   `POST /api/admin/create-student` - Register a new student User+Profile.
+*   `POST /api/admin/create-teacher` - Register a new teacher User+Profile.
+*   `GET /api/teacher/dashboard-stats` - Get aggregate attendance stats.
+*   `GET /api/reports/custom` - Generate CSV reports (Summary/Detailed).
+
+### Face Recognition API (Port 5006)
+*   **Base URL**: `http://localhost:5006`
+*   `POST /recognize` - Input: `{ image: "base64..." }` | Output: `[{ usn, confidence }]`
+*   `POST /sync` - Triggers download of new face images from Supabase.
+*   `GET /health` - Service status check.

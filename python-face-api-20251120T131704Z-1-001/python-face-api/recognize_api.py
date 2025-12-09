@@ -4,6 +4,7 @@ from flask_cors import CORS
 import cv2
 import numpy as np
 import os
+import glob
 import base64
 import time
 from deepface import DeepFace
@@ -106,10 +107,15 @@ def sync_faces():
                 deleted_count += 1
 
         # Clear old representations to force rebuild
-        pkl_path = os.path.join(FACES_DIR, f"representations_vgg_face.pkl")
-        if os.path.exists(pkl_path):
-            os.remove(pkl_path)
-            print("Cleared old model representations.")
+        # Clear old representations to force rebuild
+        # Remove both old style (representations_*) and new style (ds_model_*) pickle files
+        print("Clearing DeepFace cache files...")
+        for pkl_file in glob.glob(os.path.join(FACES_DIR, "*.pkl")):
+            try:
+                os.remove(pkl_file)
+                print(f" - Deleted cache: {os.path.basename(pkl_file)}")
+            except Exception as e:
+                print(f" - Failed to delete {os.path.basename(pkl_file)}: {e}")
 
         print(f"Sync complete. Updated {len(current_usns)} faces. Deleted {deleted_count} old records.")
         return jsonify({
@@ -173,5 +179,52 @@ def recognize():
 def health():
     return jsonify({"status": "ok"})
 
+
+def warmup():
+    """
+    Forces DeepFace to build the representations cache file (.pkl) on startup.
+    This prevents race conditions where multiple requests try to write the file simultaneously.
+    """
+    print("--- WARMING UP FACE MODEL ---")
+    
+    # Safety: Clean up existing cache files to prevent permission errors
+    # This ensures we start with a fresh writeable cache
+    for pkl in glob.glob(os.path.join(FACES_DIR, "ds_model_*.pkl")):
+        try:
+            os.remove(pkl)
+            print(f"Startup clean: Removed {os.path.basename(pkl)}")
+        except Exception as e:
+            print(f"Startup clean warn: Could not remove {os.path.basename(pkl)} - {e}")
+    try:
+        if not os.path.exists(FACES_DIR) or not os.listdir(FACES_DIR):
+            print("No faces found to warm up with. Skipping.")
+            return
+
+        # Find first available image
+        sample_img = None
+        for root, dirs, files in os.walk(FACES_DIR):
+            for file in files:
+                if file.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    sample_img = os.path.join(root, file)
+                    break
+            if sample_img: break
+        
+        if sample_img:
+            print(f"Running warmup on {sample_img}...")
+            # Run find once to trigger pickle generation
+            DeepFace.find(img_path=sample_img, 
+                          db_path=FACES_DIR, 
+                          model_name="VGG-Face", 
+                          detector_backend="opencv", 
+                          enforce_detection=False, 
+                          silent=True)
+            print("--- WARMUP COMPLETE: Model cache generated safely ---")
+        else:
+            print("No suitable images found for warmup.")
+
+    except Exception as e:
+        print(f"Warmup warning: {e}")
+
 if __name__ == "__main__":
+    warmup()
     app.run(port=5006, debug=True, use_reloader=False)
